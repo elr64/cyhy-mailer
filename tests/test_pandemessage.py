@@ -99,9 +99,7 @@ Cybersecurity and Infrastructure Security Agency<br>
         )
         self.assertEqual(message.get("CC"), None)
         self.assertEqual(message["BCC"], "cyhy_reports@hq.dhs.gov")
-        self.assertEqual(
-            message["To"],
-            "recipient@example.com,recipient2@example.com")
+        self.assertEqual(message["To"], "recipient@example.com,recipient2@example.com")
 
         # Grab the bytes that comprise the attachment
         pdf_bytes = open(pdf, "rb").read()
@@ -175,7 +173,9 @@ Cybersecurity and Infrastructure Security Agency<br>
 
         report_date = "December 15, 2001"
 
-        message = PandEMessage(pdf, report_date, to, from_addr=fm, cc_addrs=cc, bcc_addrs=bcc)
+        message = PandEMessage(
+            pdf, report_date, to, from_addr=fm, cc_addrs=cc, bcc_addrs=bcc
+        )
 
         self.assertEqual(message["From"], fm)
         self.assertEqual(
@@ -257,7 +257,9 @@ Cybersecurity and Infrastructure Security Agency<br>
 
         report_date = "December 15, 2001"
 
-        message = PandEMessage(pdf, report_date, to, from_addr=fm, cc_addrs=cc, bcc_addrs=bcc)
+        message = PandEMessage(
+            pdf, report_date, to, from_addr=fm, cc_addrs=cc, bcc_addrs=bcc
+        )
 
         self.assertEqual(message["From"], fm)
         self.assertEqual(

@@ -223,7 +223,9 @@ def get_requests_raw(db, query, batch_size=None):
     return requests
 
 
-def get_requests(db, report_types=None, federal_only=False, agency_list=False, batch_size=None):
+def get_requests(
+    db, report_types=None, federal_only=False, agency_list=False, batch_size=None
+):
     """Return a cursor for iterating over agencies' request documents.
 
     Parameters
@@ -277,7 +279,7 @@ def get_requests(db, report_types=None, federal_only=False, agency_list=False, b
         query["report_types"] = {"$in": report_types}
 
     if agency_list is not None:
-        query['_id'] = {"$in": agency_list}
+        query["_id"] = {"$in": agency_list}
 
     return get_requests_raw(db, query, batch_size)
 
@@ -1022,9 +1024,7 @@ def send_pande_reports(db, batch_size, ses_client, pande_report_dir):
             agencies.append(folder_name)
 
     try:
-        pande_requests = get_requests(
-            db, agency_list=agencies, batch_size=batch_size
-        )
+        pande_requests = get_requests(db, agency_list=agencies, batch_size=batch_size)
     except TypeError:
         return 4
 
@@ -1064,9 +1064,7 @@ def send_pande_reports(db, batch_size, ses_client, pande_report_dir):
             elif not pande_report_filenames:
                 logging.error("No PDF report found")
 
-            if (
-                pande_report_filenames
-            ):
+            if pande_report_filenames:
                 # We take the last filename since, if there happens to be more than
                 # one, it should the latest.  (This is because we sorted the glob
                 # results.)
@@ -1074,8 +1072,7 @@ def send_pande_reports(db, batch_size, ses_client, pande_report_dir):
 
                 # Extract the report date from the report filename
                 match = re.search(
-                    r"-(?P<date>\d{4}-[01]\d-[0-3]\d)",
-                    pande_report_filename,
+                    r"-(?P<date>\d{4}-[01]\d-[0-3]\d)", pande_report_filename,
                 )
                 print(match)
                 report_date = datetime.datetime.strptime(
@@ -1083,10 +1080,7 @@ def send_pande_reports(db, batch_size, ses_client, pande_report_dir):
                 ).strftime("%B %d, %Y")
 
                 # Construct the Posture and Exposure message to send
-                message = PandEMessage(
-                    pande_report_filename,
-                    report_date,
-                    to_emails)
+                message = PandEMessage(pande_report_filename, report_date, to_emails)
 
                 print(to_emails)
                 print(pande_report_filename)
@@ -1108,7 +1102,7 @@ def send_pande_reports(db, batch_size, ses_client, pande_report_dir):
     logging.info(pande_stats_string)
     print(pande_stats_string)
 
-    return (pande_stats_string)
+    return pande_stats_string
 
 
 def main():
@@ -1200,7 +1194,9 @@ def main():
         all_stats_strings.extend(stats)
 
     if args["pande"]:
-        stats = send_pande_reports(db, batch_size, ses_client, args["--pande-report-dir"])
+        stats = send_pande_reports(
+            db, batch_size, ses_client, args["--pande-report-dir"]
+        )
         all_stats_strings.extend(stats)
 
     ###
