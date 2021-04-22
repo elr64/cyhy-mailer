@@ -19,7 +19,7 @@ def readme():
 setup(
     name="cyhy-mailer",
     version=__version__,
-    description="A tool for mailing out Cyber Hygiene, trustymail, and https-scan reports.",
+    description="A tool for mailing out Cyber Hygiene, trustymail, https-scan, and Posture and Exposure reports.",
     long_description=readme(),
     long_description_content_type="text/markdown",
     # NCATS "homepage"

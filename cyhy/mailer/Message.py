@@ -151,6 +151,7 @@ class Message(MIMEMultipart):
             The filename of the PDF file to attach.
 
         """
+
         with open(pdf_filename, "rb") as attachment:
             part = MIMEApplication(attachment.read(), "pdf")
 

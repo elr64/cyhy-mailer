@@ -1,7 +1,7 @@
 # cyhy-mailer #
 
-[![Build Status](https://travis-ci.com/cisagov/cyhy-mailer.svg?branch=develop)](https://travis-ci.com/cisagov/cyhy-mailer)
-[![Coverage Status](https://coveralls.io/repos/github/cisagov/cyhy-mailer/badge.svg?branch=develop)](https://coveralls.io/github/cisagov/cyhy-mailer?branch=develop)
+[![Build Status](https://travis-ci.org/elr64/cyhy-mailer.svg?branch=develop)](https://travis.com/github/elr64/cyhy-mailer.svg?branch=develop)
+[![Coverage Status](https://coveralls.io/repos/github/elr64/cyhy-mailer/badge.svg?branch=develop)](https://coveralls.io/github/elr64/cyhy-mailer?branch=develop)
 
 `cyhy-mailer` is a tool for emailing Cyber Hygiene, `https-scan`, and
 `trustymail` reports to the appropriate technical or distribution

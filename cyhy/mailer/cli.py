@@ -2,11 +2,12 @@
 
 """cyhy-mailer: A tool for mailing out reports.
 
-cyhy-mailer can send out Cyber Hygiene and BOD 18-01 reports, as well
-as Cyber Hygiene notifications and the Cyber Exposure scorecard.
+cyhy-mailer can send out Cyber Hygiene, BOD 18-01, and Posture and
+Exposure reports, as well as Cyber Hygiene notifications and the
+Cyber Exposure scorecard.
 
 Usage:
-  cyhy-mailer (bod1801|cybex|cyhy|notification)... [--cyhy-report-dir=DIRECTORY] [--tmail-report-dir=DIRECTORY] [--https-report-dir=DIRECTORY] [--cybex-scorecard-dir=DIRECTORY] [--cyhy-notification-dir=DIRECTORY] [--db-creds-file=FILENAME] [--batch-size=SIZE] [--summary-to=EMAILS] [--debug]
+  cyhy-mailer (bod1801|cybex|cyhy|notification|pande)... [--cyhy-report-dir=DIRECTORY] [--tmail-report-dir=DIRECTORY] [--https-report-dir=DIRECTORY] [--cybex-scorecard-dir=DIRECTORY] [--cyhy-notification-dir=DIRECTORY] [--pande-report-dir=DIRECTORY] [--db-creds-file=FILENAME] [--batch-size=SIZE] [--summary-to=EMAILS] [--debug]
   cyhy-mailer (-h | --help)
 
 Options:
@@ -28,6 +29,10 @@ Options:
                                     Notification PDF reports are located.  If
                                     not specified then no Cyber Hygiene
                                     notifications will be sent.
+  --pande-report-dir=DIRECTORY      The directory where the Posture and
+                                    Exposure PDF reports are located.  If
+                                    not specified then no Posture and
+                                    Exposure reports will be sent.
   -c --db-creds-file=FILENAME       A YAML file containing the Cyber
                                     Hygiene database credentials.
                                     [default: /run/secrets/database_creds.yml]
@@ -50,6 +55,7 @@ import docopt
 import glob
 import logging
 import re
+import os
 
 import boto3
 from botocore.exceptions import ClientError
@@ -65,6 +71,7 @@ from cyhy.mailer.HttpsMessage import HttpsMessage
 from cyhy.mailer.ReportMessage import ReportMessage
 from cyhy.mailer.StatsMessage import StatsMessage
 from cyhy.mailer.TmailMessage import TmailMessage
+from cyhy.mailer.PandEMessage import PandEMessage
 
 
 class Error(Exception):
@@ -216,7 +223,7 @@ def get_requests_raw(db, query, batch_size=None):
     return requests
 
 
-def get_requests(db, report_types=None, federal_only=False, batch_size=None):
+def get_requests(db, report_types=None, federal_only=False, agency_list=False, batch_size=None):
     """Return a cursor for iterating over agencies' request documents.
 
     Parameters
@@ -234,6 +241,10 @@ def get_requests(db, report_types=None, federal_only=False, batch_size=None):
         If True then only federal agencies' request documents will be
         returned.  If unspecified or False then no such restriction is
         placed on the query.
+
+    agency_list : list(str)
+        A list of agency IDs (e.g. DOE, DOJ, DHS). If None then no such
+        restriction is placed on the query.
 
     batch_size : int
         The batch size to use when retrieving results from the Mongo
@@ -264,6 +275,9 @@ def get_requests(db, report_types=None, federal_only=False, batch_size=None):
 
     if report_types is not None:
         query["report_types"] = {"$in": report_types}
+
+    if agency_list is not None:
+        query['_id'] = {"$in": agency_list}
 
     return get_requests_raw(db, query, batch_size)
 
@@ -975,6 +989,128 @@ def send_cyhy_notifications(db, batch_size, ses_client, cyhy_notification_dir):
     return (cyhy_notification_stats_string,)
 
 
+def send_pande_reports(db, batch_size, ses_client, pande_report_dir):
+    """Send out Posture and Exposure reports.
+
+    Parameters
+    ----------
+    db : MongoDatabase
+        The Mongo database from which Cyber Hygiene agency data can
+        be retrieved.
+
+    batch_size : int
+        The batch size to use when retrieving results from the Mongo
+        database.  If None then the default will be used.
+
+    ses_client : boto3.client
+        The boto3 SES client via which the message is to be sent.
+
+    cyhy_report_dir : str
+        The directory where the Posture and Exposure reports can be found.
+        If None then no Posture and Exposure reports will be sent.
+
+    Returns
+    -------
+    tuple(str): A tuple of strings that summarizes what was sent.
+
+    """
+    agencies = []
+
+    contents = os.walk(pande_report_dir)
+    for root, folders, files in contents:
+        for folder_name in folders:
+            agencies.append(folder_name)
+
+    try:
+        pande_requests = get_requests(
+            db, agency_list=agencies, batch_size=batch_size
+        )
+    except TypeError:
+        return 4
+
+    try:
+        cyhy_agencies = pande_requests.count()
+        logging.debug(f"{cyhy_agencies} agencies found in CyHy")
+    except pymongo.errors.OperationFailure:
+        logging.critical(
+            "Mongo database error while counting the number of request documents returned",
+            exc_info=True,
+        )
+
+    agencies_emailed_pande_reports = 0
+
+    ###
+    # Iterate over cyhy_requests, if necessary
+    ###
+    if pande_report_dir:
+        for request in pande_requests:
+            id = request["_id"]
+
+            to_emails = get_emails_from_request(request)
+            # to_emails should contain at least one email
+            if not to_emails:
+                continue
+
+            ###
+            # Find and mail the Posture and Exposure report, if necessary
+            ###
+
+            pande_report_glob = f"{pande_report_dir}/{id}/*.pdf"
+            pande_report_filenames = sorted(glob.glob(pande_report_glob))
+
+            # At most one Cybex report and CSV should match
+            if len(pande_report_filenames) > 1:
+                logging.warn("More than one PDF report found")
+            elif not pande_report_filenames:
+                logging.error("No PDF report found")
+
+            if (
+                pande_report_filenames
+            ):
+                # We take the last filename since, if there happens to be more than
+                # one, it should the latest.  (This is because we sorted the glob
+                # results.)
+                pande_report_filename = pande_report_filenames[-1]
+
+                # Extract the report date from the report filename
+                match = re.search(
+                    r"-(?P<date>\d{4}-[01]\d-[0-3]\d)",
+                    pande_report_filename,
+                )
+                print(match)
+                report_date = datetime.datetime.strptime(
+                    match.group("date"), "%Y-%m-%d"
+                ).strftime("%B %d, %Y")
+
+                # Construct the Posture and Exposure message to send
+                message = PandEMessage(
+                    pande_report_filename,
+                    report_date,
+                    to_emails)
+
+                print(to_emails)
+                print(pande_report_filename)
+                print(report_date)
+
+                try:
+                    agencies_emailed_pande_reports = send_message(
+                        ses_client, message, agencies_emailed_pande_reports
+                    )
+                except (UnableToSendError, ClientError):
+                    logging.error(
+                        f"Unable to send Posture and Exposure report for agency with ID {id}",
+                        exc_info=True,
+                        stack_info=True,
+                    )
+
+    # Print out and log some statistics
+    pande_stats_string = f"Out of {cyhy_agencies} agencies with Posture and Exposure reports, {agencies_emailed_pande_reports} ({100.0 * agencies_emailed_pande_reports / cyhy_agencies:.2f}%) were emailed."
+    logging.info(pande_stats_string)
+    print(pande_stats_string)
+
+    return (pande_stats_string)
+
+
 def main():
     """Send emails."""
     # Parse command line arguments
@@ -1019,7 +1155,6 @@ def main():
             f"The database in {db_creds_file} does not exist", exc_info=True
         )
         return 1
-
     ses_client = boto3.client("ses")
 
     batch_size = args["--batch-size"]
@@ -1062,6 +1197,10 @@ def main():
         stats = send_cyhy_notifications(
             db, batch_size, ses_client, args["--cyhy-notification-dir"]
         )
+        all_stats_strings.extend(stats)
+
+    if args["pande"]:
+        stats = send_pande_reports(db, batch_size, ses_client, args["--pande-report-dir"])
         all_stats_strings.extend(stats)
 
     ###
