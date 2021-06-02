@@ -7,7 +7,7 @@ Exposure reports, as well as Cyber Hygiene notifications and the
 Cyber Exposure scorecard.
 
 Usage:
-  cyhy-mailer (bod1801|cybex|cyhy|notification|pande)... [--cyhy-report-dir=DIRECTORY] [--tmail-report-dir=DIRECTORY] [--https-report-dir=DIRECTORY] [--cybex-scorecard-dir=DIRECTORY] [--cyhy-notification-dir=DIRECTORY] [--pande-report-dir=DIRECTORY] [--db-creds-file=FILENAME] [--batch-size=SIZE] [--summary-to=EMAILS] [--debug]
+  cyhy-mailer (bod1801|cybex|cyhy|notification|pande)... [--cyhy-report-dir=DIRECTORY] [--tmail-report-dir=DIRECTORY] [--https-report-dir=DIRECTORY] [--cybex-scorecard-dir=DIRECTORY] [--cyhy-notification-dir=DIRECTORY] [--pande-report-dir=DIRECTORY] [--db-creds-file=FILENAME] [--batch-size=SIZE] [--summary-to=EMAILS] [--test-emails=EMAILS] [--debug]
   cyhy-mailer (-h | --help)
 
 Options:
@@ -44,6 +44,9 @@ Options:
                                     to which the summary statistics should be
                                     sent at the end of the run.  If not
                                     specified then no summary will be sent.
+  --test-emails=EMAILS               A comma-separated list of email addresses
+                                    to which the reports should be sent to
+                                    instead of agency emails. Used for testing.
   -d --debug                        A Boolean value indicating whether the
                                     output should include debugging messages
                                     or not.
@@ -991,7 +994,7 @@ def send_cyhy_notifications(db, batch_size, ses_client, cyhy_notification_dir):
     return (cyhy_notification_stats_string,)
 
 
-def send_pande_reports(db, batch_size, ses_client, pande_report_dir):
+def send_pande_reports(db, batch_size, ses_client, pande_report_dir, to):
     """Send out Posture and Exposure reports.
 
     Parameters
@@ -1045,8 +1048,10 @@ def send_pande_reports(db, batch_size, ses_client, pande_report_dir):
     if pande_report_dir:
         for request in pande_requests:
             id = request["_id"]
-
-            to_emails = get_emails_from_request(request)
+            if to != None:
+                to_emails = to
+            else:
+                to_emails = get_emails_from_request(request)
             # to_emails should contain at least one email
             if not to_emails:
                 continue
@@ -1163,6 +1168,15 @@ def main():
             return 4
 
     ###
+    # Email the summary statistics, if necessary
+    ###
+    test_emails = args["--test-emails"]
+    if test_emails:
+        to = test_emails.split(",")
+    else:
+        to = None
+
+    ###
     # Send reports and gather summary statistics
     ###
     all_stats_strings = []
@@ -1195,7 +1209,7 @@ def main():
 
     if args["pande"]:
         stats = send_pande_reports(
-            db, batch_size, ses_client, args["--pande-report-dir"]
+            db, batch_size, ses_client, args["--pande-report-dir"], to
         )
         all_stats_strings.extend(stats)
 
