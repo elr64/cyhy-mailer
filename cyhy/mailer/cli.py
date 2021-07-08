@@ -338,7 +338,11 @@ def send_message(ses_client, message, counter=None):
     # Check for errors
     status_code = response["ResponseMetadata"]["HTTPStatusCode"]
     if status_code != 200:
+<<<<<<< HEAD
         logging.error(f"Unable to send message. Response from boto3 is: {response}")
+=======
+        logging.error(f"Unable to send message.  Response from boto3 is: {response}")
+>>>>>>> f29329f0ede474a1c998575350df405b261c441e
         raise UnableToSendError(response)
 
     if counter is not None:
